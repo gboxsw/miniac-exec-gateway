@@ -1,4 +1,4 @@
-package com.gboxsw.miniac.execgateway;
+package com.gboxsw.miniac.gateways.exec;
 
 import java.util.Map;
 import java.util.logging.Level;
