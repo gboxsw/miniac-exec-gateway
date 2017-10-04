@@ -1,4 +1,4 @@
-package com.gboxsw.miniac.gateways.exec;
+package com.gboxsw.miniac.gateways.exec.executor;
 
 /**
  * The listener interface for receiving notifications about completed execution

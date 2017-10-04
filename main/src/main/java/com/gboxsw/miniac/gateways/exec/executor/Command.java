@@ -1,4 +1,4 @@
-package com.gboxsw.miniac.gateways.exec;
+package com.gboxsw.miniac.gateways.exec.executor;
 
 /**
  * The command to be executed by the system.

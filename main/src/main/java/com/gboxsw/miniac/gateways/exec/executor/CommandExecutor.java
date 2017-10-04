@@ -1,4 +1,4 @@
-package com.gboxsw.miniac.gateways.exec;
+package com.gboxsw.miniac.gateways.exec.executor;
 
 import java.io.*;
 import java.util.*;
@@ -7,7 +7,7 @@ import java.util.logging.Level;
 import java.util.logging.Logger;
 
 /**
- * The asynchronous executor of commands.
+ * The asynchronous executor of commands in separate processes.
  */
 public class CommandExecutor {
 
@@ -19,7 +19,7 @@ public class CommandExecutor {
 	/**
 	 * Request to execute a command.
 	 */
-	private static class ExecutionRequest {
+	private static class ExecRequest {
 
 		/**
 		 * Identifier of execution queue.
@@ -59,7 +59,7 @@ public class CommandExecutor {
 		 * @param command
 		 *            the command.
 		 */
-		public ExecutionRequest(String queueId, Command command) {
+		public ExecRequest(String queueId, Command command) {
 			this.queueId = queueId;
 			this.command = command;
 		}
@@ -74,7 +74,7 @@ public class CommandExecutor {
 	/**
 	 * Requests in execution groups.
 	 */
-	private final Map<String, Queue<ExecutionRequest>> executionQueues = new HashMap<>();
+	private final Map<String, Queue<ExecRequest>> executionQueues = new HashMap<>();
 
 	/**
 	 * Indicates whether the execution platform is windows.
@@ -99,7 +99,7 @@ public class CommandExecutor {
 	}
 
 	/**
-	 * Executes a command.
+	 * Executes a command in a separate process.
 	 * 
 	 * @param queueId
 	 *            the identifier of execution queue in which the command should
@@ -108,10 +108,10 @@ public class CommandExecutor {
 	 *            the command to be executed.
 	 */
 	public void execute(String queueId, Command command) {
-		ExecutionRequest request = new ExecutionRequest(queueId, command);
+		ExecRequest request = new ExecRequest(queueId, command);
 
 		synchronized (lock) {
-			Queue<ExecutionRequest> executionQueue = executionQueues.get(request.queueId);
+			Queue<ExecRequest> executionQueue = executionQueues.get(request.queueId);
 			if (executionQueue == null) {
 				executionQueue = new LinkedList<>();
 				executionQueues.put(request.queueId, executionQueue);
@@ -171,13 +171,13 @@ public class CommandExecutor {
 	 * @param request
 	 *            the request to be executed.
 	 */
-	private void executeRequest(final ExecutionRequest request) {
+	private void executeRequest(final ExecRequest request) {
 		String sanitizedCommand = windowsPlatform ? "cmd.exe /c " + request.command.getCommand()
 				: request.command.getCommand();
 
 		final ProcessBuilder pb = new ProcessBuilder(sanitizedCommand.split(" "));
 		System.out.println(pb.command());
-		
+
 		pb.directory(new File(System.getProperty("user.dir")));
 
 		try {
@@ -205,7 +205,7 @@ public class CommandExecutor {
 	 * @param pb
 	 *            the pre-configured instance of {@link ProcessBuilder}.
 	 */
-	private void createAndExecuteProcess(ExecutionRequest request, ProcessBuilder pb) {
+	private void createAndExecuteProcess(ExecRequest request, ProcessBuilder pb) {
 		Process process = null;
 		int exitCode = 0;
 		boolean success = true;
@@ -285,7 +285,7 @@ public class CommandExecutor {
 		// remove request from execution queue and start next pending request in
 		// the same queue
 		synchronized (lock) {
-			Queue<ExecutionRequest> executionQueue = executionQueues.get(request.queueId);
+			Queue<ExecRequest> executionQueue = executionQueues.get(request.queueId);
 			if ((executionQueue == null) || (executionQueue.peek() != request)) {
 				logger.log(Level.SEVERE, "Invalid internal state of CommandExecutor.");
 			}
@@ -308,7 +308,7 @@ public class CommandExecutor {
 	 * @param request
 	 *            the completed request.
 	 */
-	private void notifyCompletedRequest(ExecutionRequest request) {
+	private void notifyCompletedRequest(ExecRequest request) {
 		ExecutionResult result;
 		synchronized (request) {
 			byte[] stdout = (request.stdout != null) ? request.stdout.toByteArray() : null;
