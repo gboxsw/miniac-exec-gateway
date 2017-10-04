@@ -205,6 +205,7 @@ public class ExecQueue {
 		OutputConsumer outputConsumer;
 		synchronized (lock) {
 			outputConsumer = outputConsumers.get(commandId);
+			outputConsumers.remove(commandId);
 		}
 
 		if (outputConsumer != null) {
