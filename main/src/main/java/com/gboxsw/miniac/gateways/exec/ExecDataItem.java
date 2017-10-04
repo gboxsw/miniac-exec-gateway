@@ -78,6 +78,10 @@ public class ExecDataItem<T> extends DataItem<T> {
 		if (this.config.getConverter() == null) {
 			throw new IllegalArgumentException("Configuration does not define value converter.");
 		}
+
+		if (execGatewayId == null) {
+			throw new IllegalArgumentException("The identifier of gateway cannot be null.");
+		}
 	}
 
 	@Override

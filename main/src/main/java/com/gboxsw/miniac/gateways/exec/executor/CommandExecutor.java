@@ -176,7 +176,6 @@ public class CommandExecutor {
 				: request.command.getCommand();
 
 		final ProcessBuilder pb = new ProcessBuilder(sanitizedCommand.split(" "));
-		System.out.println(pb.command());
 
 		pb.directory(new File(System.getProperty("user.dir")));
 
