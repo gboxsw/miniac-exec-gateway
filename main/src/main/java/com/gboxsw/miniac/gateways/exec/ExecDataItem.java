@@ -59,6 +59,11 @@ public class ExecDataItem<T> extends DataItem<T> {
 	private String baseChangeTopic;
 
 	/**
+	 * Message that forces update of value.
+	 */
+	private Message updateMessage;
+
+	/**
 	 * Constructs the
 	 * 
 	 * @param execGatewayId
@@ -103,8 +108,8 @@ public class ExecDataItem<T> extends DataItem<T> {
 		}
 
 		// setup publication of update messages
-		updateCancellable = app.publishWithFixedDelay(new Message(updateTopic, config.getUpdateCommand()), 0,
-				config.getUpdatePeriod(), TimeUnit.SECONDS);
+		updateMessage = new Message(updateTopic, config.getUpdateCommand());
+		updateCancellable = app.publishWithFixedDelay(updateMessage, 0, config.getUpdatePeriod(), TimeUnit.SECONDS);
 
 		// setup subscription for receiving outputs of update commands
 		updateSubscription = app.subscribe(baseUpdateTopic, new MessageListener() {
@@ -150,6 +155,7 @@ public class ExecDataItem<T> extends DataItem<T> {
 		}
 
 		getApplication().publish(new Message(changeTopic, changeCommand));
+		getApplication().publish(updateMessage);
 	}
 
 	@Override
