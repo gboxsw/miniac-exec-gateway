@@ -64,11 +64,14 @@ public class ExecDataItem<T> extends DataItem<T> {
 	private Message updateMessage;
 
 	/**
-	 * Constructs the
+	 * Constructs the data item.
 	 * 
 	 * @param execGatewayId
+	 *            the identifier of execution gateway.
 	 * @param config
+	 *            the configuration of data item.
 	 * @param type
+	 *            the type of value.
 	 */
 	public ExecDataItem(String execGatewayId, ExecDataItemConfig<T> config, Class<T> type) {
 		super(type, config.getChangeCommandFactory() == null);
