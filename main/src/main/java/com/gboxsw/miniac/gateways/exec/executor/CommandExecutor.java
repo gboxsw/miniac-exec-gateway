@@ -87,15 +87,48 @@ public class CommandExecutor {
 	private ExecutionListener executionListener;
 
 	/**
+	 * Directory where commands will be executed.
+	 */
+	private final File executionDirectory;
+
+	/**
 	 * Internal synchronization lock.
 	 */
 	private final Object lock = new Object();
 
 	/**
+	 * Constructs the command executor with defined execution directory.
+	 * 
+	 * @param executionDirectory
+	 *            the directory where all commands will be executed.
+	 */
+	public CommandExecutor(File executionDirectory) {
+		windowsPlatform = System.getProperty("os.name").toLowerCase().startsWith("windows");
+
+		if ((executionDirectory != null) && !executionDirectory.exists()) {
+			logger.log(Level.SEVERE,
+					"The execution directory " + executionDirectory.getAbsolutePath() + " does not exist.");
+			executionDirectory = null;
+		}
+
+		if ((executionDirectory != null) && !executionDirectory.isDirectory()) {
+			logger.log(Level.SEVERE,
+					"The execution directory " + executionDirectory.getAbsolutePath() + " is not a directory.");
+			executionDirectory = null;
+		}
+
+		if (executionDirectory == null) {
+			executionDirectory = new File(System.getProperty("user.dir"));
+		}
+
+		this.executionDirectory = executionDirectory;
+	}
+
+	/**
 	 * Constructs the command executor.
 	 */
 	public CommandExecutor() {
-		windowsPlatform = System.getProperty("os.name").toLowerCase().startsWith("windows");
+		this(null);
 	}
 
 	/**
@@ -176,8 +209,7 @@ public class CommandExecutor {
 				: request.command.getCommand();
 
 		final ProcessBuilder pb = new ProcessBuilder(sanitizedCommand.split(" "));
-
-		pb.directory(new File(System.getProperty("user.dir")));
+		pb.directory(executionDirectory);
 
 		try {
 			executor.execute(new Runnable() {

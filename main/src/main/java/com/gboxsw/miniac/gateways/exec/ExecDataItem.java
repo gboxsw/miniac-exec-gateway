@@ -110,7 +110,13 @@ public class ExecDataItem<T> extends DataItem<T> {
 		updateSubscription = app.subscribe(baseUpdateTopic, new MessageListener() {
 			@Override
 			public void onMessage(Message message) {
-				latestValue = config.getConverter().convertSourceToTarget(message.getPayload());
+				try {
+					latestValue = config.getConverter().convertSourceToTarget(message.getPayload());
+				} catch (Exception e) {
+					latestValue = null;
+					logger.log(Level.WARNING, "Conversion of value for data item " + getId() + " failed.", e);
+				}
+
 				update();
 			}
 		});

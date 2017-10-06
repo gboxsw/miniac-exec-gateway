@@ -1,5 +1,6 @@
 package com.gboxsw.miniac.gateways.exec;
 
+import java.io.File;
 import java.util.Map;
 import java.util.logging.Level;
 import java.util.logging.Logger;
@@ -37,9 +38,33 @@ public class ExecGateway extends Gateway {
 	 */
 	private CommandExecutor cmdExecutor;
 
+	/**
+	 * The directory that is set as working directory before executing commands.
+	 */
+	private final File executionDirectory;
+
+	/**
+	 * Constructs the gateway with given execution directory.
+	 * 
+	 * @param executionDirectory
+	 *            the directory that is set as working directory before
+	 *            executing commands
+	 */
+	public ExecGateway(File executionDirectory) {
+		this.executionDirectory = executionDirectory;
+	}
+
+	/**
+	 * Constructs the gateway. All commands are executed with respect to current
+	 * working directory.
+	 */
+	public ExecGateway() {
+		this(null);
+	}
+
 	@Override
 	protected void onStart(Map<String, Bundle> bundles) {
-		cmdExecutor = new CommandExecutor();
+		cmdExecutor = new CommandExecutor(executionDirectory);
 		cmdExecutor.setExecutionListener(new ExecutionListener() {
 			@Override
 			public void commandCompleted(Command command, ExecutionResult result) {

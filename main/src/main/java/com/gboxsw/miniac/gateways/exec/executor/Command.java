@@ -19,7 +19,7 @@ public class Command {
 	 * Timeout in milliseconds for process to complete the command.
 	 */
 	private final long timeout;
-
+	
 	/**
 	 * Constructs new command with timeout.
 	 * 
