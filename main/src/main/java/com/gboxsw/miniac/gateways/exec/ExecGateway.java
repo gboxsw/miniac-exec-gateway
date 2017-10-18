@@ -1,21 +1,23 @@
 package com.gboxsw.miniac.gateways.exec;
 
-import java.io.File;
-import java.util.Map;
-import java.util.logging.Level;
-import java.util.logging.Logger;
+import java.util.*;
+import java.util.logging.*;
+import java.util.regex.Pattern;
 
 import com.gboxsw.miniac.*;
-import com.gboxsw.miniac.gateways.exec.executor.*;
+
+import com.gboxsw.miniac.gateways.exec.InternalExecutionManager.*;
 
 /**
- * Gateway that provides message-based asynchronous execution of system
- * commands. Command to execute has to be published in a specific topic. The
- * structure of topics is as follows: [id of execution queue]/[id of command]
+ * Gateway that provides message-based asynchronous execution of commands. In
+ * order to execute a command, the command must be published in a specific
+ * topic. The structure of topics provided by the gateway is as follows:
+ * 
+ * [id of execution queue]/[id of command]
  * 
  * It is possible to send multiple commands with the same id. However, the their
- * results are indistinguishable. Note that within an execution queue, all
- * commands are executed in serial order. The result of execution is send back
+ * results are indistinguishable. Note that within the execution queue, all
+ * commands are executed in a serial order. The result of execution is send back
  * to the same topic. In order to define execution timeout for command, append
  * timeout to topic.
  * 
@@ -25,8 +27,19 @@ import com.gboxsw.miniac.gateways.exec.executor.*;
  * identifier of the command is "cpu", the execution timeout is 10 seconds
  * (waiting time is not considered), the result will be published in topic
  * "system/cpu".
+ * 
+ * All published command must be prefixed with identifier of a registered
+ * command executor. For instance, the command "echo 1" to executor with id
+ * "cmd" is submitted as "@cmd echo 1"
+ * 
+ * Note that initially no command executors are registered.
  */
 public class ExecGateway extends Gateway {
+
+	/**
+	 * Default (pre-defined) name of the gateway.
+	 */
+	public static final String DEFAULT_ID = "exec";
 
 	/**
 	 * Logger.
@@ -34,41 +47,73 @@ public class ExecGateway extends Gateway {
 	private static final Logger logger = Logger.getLogger(ExecGateway.class.getName());
 
 	/**
-	 * The executor of system commands.
+	 * Pattern defining valid identifier of a command executor.
 	 */
-	private CommandExecutor cmdExecutor;
+	private static final Pattern idPattern = Pattern.compile("^[a-zA-Z][a-zA-Z0-9]*$");
 
 	/**
-	 * The directory that is set as working directory before executing commands.
+	 * List of registered command executors.
 	 */
-	private final File executionDirectory;
+	private final Map<String, CommandExecutor> commandExecutors = new HashMap<>();
 
 	/**
-	 * Constructs the gateway with given execution directory.
-	 * 
-	 * @param executionDirectory
-	 *            the directory that is set as working directory before
-	 *            executing commands
+	 * The execution manager that manages and realizes asynchronous execution of
+	 * tasks/commands.
 	 */
-	public ExecGateway(File executionDirectory) {
-		this.executionDirectory = executionDirectory;
+	private InternalExecutionManager executionManager;
+
+	/**
+	 * Constructs the gateway.
+	 */
+	public ExecGateway() {
+
 	}
 
 	/**
-	 * Constructs the gateway. All commands are executed with respect to current
-	 * working directory.
+	 * Registers a command executor.
+	 * 
+	 * @param id
+	 *            the identifier of the command executor.
+	 * @param commandExecutor
+	 *            the command executor.
 	 */
-	public ExecGateway() {
-		this(null);
+	public void registerCommandExecutor(String id, CommandExecutor commandExecutor) {
+		if ((id == null) || id.trim().isEmpty()) {
+			throw new NullPointerException("The identifier of command executor cannot be null or an empty string.");
+		}
+
+		if (commandExecutor == null) {
+			throw new NullPointerException("The command executor cannot be null.");
+		}
+
+		id = id.trim();
+		if (!idPattern.matcher(id).matches()) {
+			throw new IllegalArgumentException("Invalid identifier of command executor.");
+		}
+
+		synchronized (commandExecutors) {
+			if (isRunning()) {
+				throw new IllegalStateException("The gateway is started. No command executor can be registered.");
+			}
+
+			if (commandExecutors.containsKey(id)) {
+				if (commandExecutors.get(id) == commandExecutor) {
+					return;
+				}
+
+				throw new IllegalStateException("Command executor with identifier " + id + " is already registered.");
+			}
+
+			commandExecutors.put(id, commandExecutor);
+		}
 	}
 
 	@Override
 	protected void onStart(Map<String, Bundle> bundles) {
-		cmdExecutor = new CommandExecutor(executionDirectory);
-		cmdExecutor.setExecutionListener(new ExecutionListener() {
+		executionManager = new InternalExecutionManager(getApplication().getExecutorService(), new ExecutionListener() {
 			@Override
-			public void commandCompleted(Command command, ExecutionResult result) {
-				handleCommandCompletion(command, result);
+			public void taskCompleted(Task command, byte[] result) {
+				handleReceivedMessage(new Message(command.id, result));
 			}
 		});
 	}
@@ -89,6 +134,7 @@ public class ExecGateway extends Gateway {
 	protected void onPublish(Message message) {
 		logger.log(Level.FINE, "Received message with command: " + message.getContent());
 
+		// analyze topic hierarchy
 		String[] topicHierarchy = Application.parseTopicHierarchy(message.getTopic());
 		String queueId = topicHierarchy[0];
 		String commandId = topicHierarchy[1];
@@ -101,14 +147,35 @@ public class ExecGateway extends Gateway {
 			}
 		}
 
-		Command cmd;
-		if (timeout > 0) {
-			cmd = new Command(message.getContent(), queueId + "/" + commandId, timeout * 1000);
-		} else {
-			cmd = new Command(message.getContent(), queueId + "/" + commandId);
+		// reply topic
+		String replyTopic = queueId + "/" + commandId;
+
+		// parse command, the expected format is "@commandExecutor localCommand"
+		String command = message.getContent().trim();
+		String executorId = "";
+		String localCommand = "";
+		if (command.startsWith("@")) {
+			int sepIdx = command.indexOf(' ');
+			if (sepIdx >= 0) {
+				executorId = command.substring(1, sepIdx).trim();
+				localCommand = command.substring(sepIdx + 1).trim();
+			}
 		}
 
-		cmdExecutor.execute(topicHierarchy[0], cmd);
+		// check executor
+		CommandExecutor commandExecutor;
+		synchronized (commandExecutors) {
+			commandExecutor = commandExecutors.get(executorId);
+		}
+
+		if (commandExecutor == null) {
+			logger.log(Level.SEVERE, "Unknown or undefined command executor in the received command:" + command);
+			handleReceivedMessage(new Message(replyTopic, (byte[]) null));
+		}
+
+		// submit task to execute by the execution manager
+		Task task = new Task(localCommand, commandExecutor, replyTopic, timeout > 0 ? timeout * 1000 : -1);
+		executionManager.execute(queueId, task);
 	}
 
 	@Override
@@ -118,7 +185,7 @@ public class ExecGateway extends Gateway {
 
 	@Override
 	protected void onStop() {
-		cmdExecutor.shutdown(false);
+		// cmdExecutor.shutdown(false);
 	}
 
 	@Override
@@ -156,18 +223,5 @@ public class ExecGateway extends Gateway {
 		}
 
 		return true;
-	}
-
-	/**
-	 * Handles completion of a command. The method is not invoked in the main
-	 * application thread.
-	 * 
-	 * @param command
-	 *            the completed command.
-	 * @param result
-	 *            the execution result.
-	 */
-	private void handleCommandCompletion(Command command, ExecutionResult result) {
-		handleReceivedMessage(new Message(command.getId(), result.isSuccessful() ? result.getStdout() : null));
 	}
 }
