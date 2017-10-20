@@ -19,7 +19,7 @@ public class ExecQueue {
 		 * @param output
 		 *            the output of the execution.
 		 */
-		public void handleOutput(String output);
+		public void handleOutput(byte[] output);
 	}
 
 	/**
@@ -56,7 +56,7 @@ public class ExecQueue {
 	 * Default execution timeout in seconds. If the value is 0 or negative, no
 	 * timeout is applied.
 	 */
-	private long defaultTimeout;
+	private int defaultTimeout;
 
 	/**
 	 * Output consumers for commands in execution.
@@ -144,6 +144,29 @@ public class ExecQueue {
 	}
 
 	/**
+	 * Returns default timeout in seconds for execution of a command.
+	 * 
+	 * @return the timeout in seconds.
+	 */
+	public int getTimeout() {
+		synchronized (lock) {
+			return defaultTimeout;
+		}
+	}
+
+	/**
+	 * Sets default timeout in seconds for execution of a command.
+	 * 
+	 * @param timeout
+	 *            the timeout in seconds.
+	 */
+	public void setTimeout(int timeout) {
+		synchronized (lock) {
+			this.defaultTimeout = timeout;
+		}
+	}
+
+	/**
 	 * Asynchronously executes a commands with default timeout.
 	 * 
 	 * @param command
@@ -154,6 +177,17 @@ public class ExecQueue {
 	 */
 	public void execute(String command, OutputConsumer outputConsumer) {
 		execute(command, defaultTimeout, outputConsumer);
+	}
+
+	/**
+	 * Asynchronously executes a commands with default timeout.
+	 * 
+	 * @param command
+	 *            the string command to be executed asynchronously in a separate
+	 *            process.
+	 */
+	public void execute(String command) {
+		execute(command, defaultTimeout, null);
 	}
 
 	/**
@@ -200,7 +234,6 @@ public class ExecQueue {
 	private void handleMessage(Message message) {
 		String[] topicHierarchy = Application.parseTopicHierarchy(message.getTopic());
 		String commandId = topicHierarchy[2];
-		String output = message.getContent();
 
 		OutputConsumer outputConsumer;
 		synchronized (lock) {
@@ -209,7 +242,7 @@ public class ExecQueue {
 		}
 
 		if (outputConsumer != null) {
-			outputConsumer.handleOutput(output);
+			outputConsumer.handleOutput(message.getPayload());
 		}
 	}
 }
